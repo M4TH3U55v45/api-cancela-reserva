@@ -1,6 +1,7 @@
 import mysql.connector
 import requests
 from flask import Flask, jsonify, request
+import flask_swagger_ui import get_swaggerui_blueprint
 
 def conectionDB():
     conection = mysql.connector.connect(
@@ -12,6 +13,13 @@ def conectionDB():
 
 app = Flask(__name__)
 
+PREFIX = "/api"
+api = Api(app, prefix=PREFIX)
+
+SWAGGER_URL = f'{PREFIX}/swagger/'
+API_URL = '/static/swagger.json'
+swaggerui_blueprint = get_swaggerui_blueprint(SWAGGER_URL, API_URL, config={'app_name': 'API-Cancela-Reserva'})
+app.register_blueprint(swagger_ui_blueprint)
 
 @app.route('/CancelaReserva/<id_reserva>', methods=['GET'])
 def consultarCancelamento(id_reserva):
