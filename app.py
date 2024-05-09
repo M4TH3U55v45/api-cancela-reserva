@@ -1,7 +1,9 @@
 import mysql.connector
 import requests
+from datetime import datetime
 from flask import Flask, jsonify, request
-import flask_swagger_ui import get_swaggerui_blueprint
+from flask_swagger_ui import get_swaggerui_blueprint
+
 
 def conectionDB():
     conection = mysql.connector.connect(
@@ -11,21 +13,20 @@ def conectionDB():
         database='cancelareserva')
     return conection
 
+
 app = Flask(__name__)
 
-PREFIX = "/api"
-api = Api(app, prefix=PREFIX)
-
-SWAGGER_URL = f'{PREFIX}/swagger/'
+SWAGGER_URL = '/swagger/'
 API_URL = '/static/swagger.json'
 swaggerui_blueprint = get_swaggerui_blueprint(SWAGGER_URL, API_URL, config={'app_name': 'API-Cancela-Reserva'})
-app.register_blueprint(swagger_ui_blueprint)
+app.register_blueprint(swaggerui_blueprint)
+
 
 @app.route('/CancelaReserva/<id_reserva>', methods=['GET'])
 def consultarCancelamento(id_reserva):
     conection = conectionDB()
     cursor = conection.cursor(dictionary=True)
-    sql = 'SELECT * FROM cancelamento WHERE id_reserva = %s'
+    sql = 'SELECT * FROM cancelamento WHERE Id_reserva = %s'
     values = [id_reserva]
     try:
         cursor.execute(sql, values)
@@ -33,57 +34,52 @@ def consultarCancelamento(id_reserva):
         if data:
             return jsonify(data[0])
         else:
-            return jsonify({'error': 'Cancelamento não encontrado'}), 404
+            return jsonify({'error': 'Cancelamento não encontrado com esse ID'}), 404
     except mysql.connector.Error as err:
         print(f"Erro ao consultar o cancelamento: {err}")
-        return jsonify({'error': f"Erro ao consultar a cancelamento: {err}"}), 400
+        return jsonify({'error': f"Erro ao consultar o cancelamento"}), 400
     finally:
         cursor.close()
         conection.close()
 
 
-
-
 @app.route('/CancelaReserva/<id_reserva>', methods=['POST'])
 def cancela_reserva(id_reserva):
-
-    reserva = requests.delete('/reserva/idReserva', params={'id_reserva': id_reserva})
+    reserva = requests.delete(f'http://127.0.0.1:5001/reservar/{id_reserva}')
+    if reserva.status_code != 200:
+        return jsonify({'error': 'Erro ao cancelar, reserva com esse ID não foi encontrada'}), 404
     data = reserva.json()
-    id_reserva = data['id_reserva']
-    cancelaReserva = cancela_reserva(id_reserva)
-    if cancelaReserva:
-        return jsonify(cancelaReserva), 200
-    else:
-        return jsonify({'error': 'Nao foi possivel fazer a reserva'}), 404
+    if not data:
+        return jsonify({'error': 'Erro ao realizar a cancelamento'}), 400
 
-    if response.status_code == 200:
-        Cancelamento = {
-            Id: int,
-            Id_reserva: int,
-            Id_hotel: int,
-            Id_quarto: int,
-            DataC: datetime
+    conection = conectionDB()
+    cursor = conection.cursor(dictionary=True)
+    sql = 'insert into cancelamento (Id_reserva, Id_hotel, Id_quarto, DataC) values (%s, %s, %s, %s)'
+    dataAtual = datetime.now()
+    print(data["idreserva"])
+    print(data["idhotel"])
+    print(data["idquarto"])
+    print(dataAtual)
+    values = [data["idreserva"], data["idhotel"], data["idquarto"], dataAtual]
+    try:
+        cursor.execute(sql, values)
+        conection.commit()
+        cancelamento = {
+            "DataC": dataAtual,
+            "Id": cursor.lastrowid,
+            "Id_hotel": data["idhotel"],
+            "Id_quarto": data["idquarto"],
+            "Id_reserva": data["idreserva"]
         }
+        return jsonify(cancelamento), 201
 
-
-        novo_cancelamento = {
-            'Id': len(cancelamentos) + 1,
-            'Id_reserva': id_reserva,
-            'Id_hotel': id_hotel,
-            'Id_quarto': id_quarto,
-            'DataC': 'datetime'
-        }
-        cancelamentos.append(novo_cancelamento)
-
-        return jsonify(novo_cancelamento), 201
-    elif response.status_code == 400:
-        return jsonify({'message': 'Erro ao cancelar reserva: Bad Request'}), 400
-    elif response.status_code == 404:
-        return jsonify({'message': 'Erro ao cancelar reserva: Not Found'}), 404
-    else:
-        return jsonify({'message': 'Erro desconhecido ao cancelamentos'}), 400
-
+    except mysql.connector.Error as err:
+        print(f"Erro ao realizar o cancelamento: {err}")
+        return jsonify({'error': f"Erro ao realizar a cancelamento"}), 400
+    finally:
+        cursor.close()
+        conection.close()
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port = '5003')
+    app.run(debug=True, port='5003')
